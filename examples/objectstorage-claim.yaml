@@ -1,0 +1,15 @@
+apiVersion: aws.moonorb.cloud/v1alpha1
+kind: ObjectStorage # Must match with ClaimName in definition.yaml(Compositio Resource Defintion/XRD)
+metadata:
+  name: myobjectstorage #Name of the Object in Kubernetes
+  namespace: test-ns
+  annotations:
+    organization: MoonorbCon
+spec:
+  resourceConfig:
+    providerConfigName: non-default # Must match with your providerconfig object in providerconfigs/providerconfig.yaml 
+    region: us-east-1
+    name: tst-bckt-must-be-uniq # Name for the Bucket Resource
+    tags:
+      admin_contact: admin@moonorb.cloud
+      env: demo

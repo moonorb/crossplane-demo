@@ -1,0 +1,84 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: s3bucket.aws.moonorb.cloud
+  labels:
+    nimbus.qualcomm.com/providerr: aws
+spec:
+  writeConnectionSecretsToNamespace: crossplane-system
+  compositeTypeRef:
+    apiVersion: aws.moonorb.cloud/v1alpha1
+    kind: XObjectStorage
+  patchSets:
+    - name: common-fields
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.resourceConfig.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.resourceConfig.region
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.resourceConfig.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.resourceConfig.tags
+          toFieldPath: spec.forProvider.tags
+          policy:
+            mergeOptions:
+              keepMapValues: true
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.resourceConfig.name
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+          
+  resources:
+# First Resource which is the bucket itself
+    - name: s3-bucket
+      connectionDetails:
+        - type: FromFieldPath
+          name: bucketName
+          fromFieldPath: status.atProvider.id
+      base:
+        apiVersion: s3.aws.upbound.io/v1beta1
+        kind: Bucket
+        spec:
+          deletionPolicy: Delete
+          forProvider:
+            region: us-west-2
+            forceDestroy: true
+            writeConnectionSecretToRef:
+              namespace: crossplane-system
+      patches:
+        - type: PatchSet
+          patchSetName: common-fields
+        - fromFieldPath: "spec.resourceConfig.name"
+          toFieldPath: "metadata.name"
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.id
+          toFieldPath: status.bucketArn
+          transforms:
+            - type: string
+              string:
+                fmt: "arn:aws:s3:::%s"
+
+# Second Resource to block public access to the bucket                           
+    - name: s3-blockpublicaccess
+      base:
+        apiVersion: s3.aws.upbound.io/v1beta1
+        kind: BucketPublicAccessBlock
+        spec:
+          deletionPolicy: Delete
+          forProvider:
+            blockPublicPolicy: true
+            blockPublicAcls: true
+            ignorePublicAcls: true
+            restrictPublicBuckets: true            
+            bucketSelector:
+              matchControllerRef: true
+      patches:    
+        - fromFieldPath: spec.resourceConfig.region
+          toFieldPath: spec.forProvider.region
+        - fromFieldPath: spec.resourceConfig.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+        - fromFieldPath: "spec.resourceConfig.name"
+          toFieldPath: "metadata.name"          
